@@ -39,8 +39,13 @@ model Todo {
 model RefreshToken {
   id        String   @id @default(uuid())
   userId    String
+
   tokenHash String   @unique
-  revoked   Boolean  @default(false)
+  replacedByTokenHash String?
+
+  revokedAt DateTime?
+  revokeReason String?
+  
   expiresAt DateTime
   createdAt DateTime @default(now())
 
