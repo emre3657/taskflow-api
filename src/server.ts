@@ -1,23 +1,39 @@
 import "dotenv/config";
 import "express-async-errors";
+import express from "express";
+import cookieParser from "cookie-parser";
+import { authRouter } from "./routes/auth-route.js";
+import { prisma } from "./lib/prisma.js";
+import { errorHandlerMiddleware } from "./middleware/error-handler-middleware.js";
+import { notFoundMiddleware } from "./middleware/not-found-middleware.js";
 
-import { StatusCodes } from "http-status-codes";
-import {prisma} from "./lib/prisma.js";
-
-import express from "express"
+// Create Express app
 const app = express();
 
-// Middlewares
-import ErrorHandlerMiddleware from "./middleware/error-handler.js";
+// Json parser middleware
+app.use(express.json());
 
-app.get("/health/db", async (_req, res) => {
-    await prisma.$queryRaw`SELECT 1`;
-    res.status(StatusCodes.OK).json({status: "success", message: "DB connection is successful"});
-})
+// Cookie parser middleware
+app.use(cookieParser());
 
-app.use(ErrorHandlerMiddleware);
+// Auth routes
+app.use("/api/v1/auth", authRouter);
 
+// Not found middleware
+app.use(notFoundMiddleware);
+
+// Error handler middleware
+app.use(errorHandlerMiddleware);
+
+// Set port
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`API is running on port ${PORT}`);
-})
+
+// Start API
+const start = async () => {
+  await prisma.$connect();
+  app.listen(PORT, () => {
+  console.log(`API is running on port ${PORT}`);
+  });
+}
+
+start();
