@@ -34,7 +34,7 @@ async function registerUser (input: RegisterServiceInput)  {
   // Create an user
   const user = await prisma.user.create({
     data: {username, email, passwordHash},
-    select: {id: true, username: true, email: true, createdAt: true}
+    select: { id: true, username: true }
   });
 
   // Sign an access token
@@ -74,7 +74,7 @@ async function registerUser (input: RegisterServiceInput)  {
 async function loginUser(input: LoginInput) {
   const { username, password: candidatePassword } = input;
   
-  const user = await prisma.user.findUnique({where: { username }});
+  const user = await prisma.user.findUnique({where: { username }, select: { id: true, username: true, passwordHash: true }});
 
   if (!user) {
     throw new BadRequestError("Invalid credentials");
