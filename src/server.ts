@@ -10,11 +10,11 @@ import { notFoundMiddleware } from "./middleware/not-found-middleware.js";
 // Create Express app
 const app = express();
 
-// Json parser middleware
-app.use(express.json());
-
 // Cookie parser middleware
 app.use(cookieParser());
+
+// Json parser middleware
+app.use(express.json());
 
 // Auth routes
 app.use("/api/v1/auth", authRouter);
