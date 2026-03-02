@@ -1,4 +1,4 @@
-import type{ RegisterInput, LoginInput } from "../controllers/auth-controller.js";
+import type{ RegisterInput, LoginInput } from "../schemas/auth-schema.js";
 import type { AccessPayload } from "../utils/jwt-util.js";
 import crypto from "node:crypto";
 import { prisma } from "../lib/prisma.js";

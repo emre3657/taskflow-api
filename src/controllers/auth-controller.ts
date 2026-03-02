@@ -1,35 +1,17 @@
 import type { RequestHandler } from "express";
 import { revokeReasons } from "../services/auth-service.js";
 import { StatusCodes } from "http-status-codes";
-import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import {registerUser, loginUser, rotateRefreshToken} from "../services/auth-service.js";
 import { UnauthenticatedError } from "../errors/unauthenticated-error.js";
 import { addTime } from "../utils/day-util.js";
 import { hashRefreshToken } from "../utils/hash-util.js";
+import { registerSchema, loginSchema } from "../schemas/auth-schema.js";
 
 const REFRESH_COOKIE_NAME = "refreshToken";
 const REFRESH_COOKIE_PATH = "/api/v1/auth/refresh";
 
-// Create register schema with Zod
-const registerSchema = z
-  .object({
-  username: z.string().min(5, "Username must be at least 5 characters long"),
-  email: z.email("Please enter a valid emaild adrress"),
-  password: z
-    .string()
-    .min(8, "Password must be at least 8 characters long")
-    .regex(/[A-Za-z]/, "Password must contain at least one letter")
-    .regex(/\d/, "Password must contain at least one number"),
-  repassword: z.string().min(8)
-  })
-  .refine((data) => data.password === data.repassword, {
-    error: "Passwords do not match", 
-    path: ["repassword"]
-  });
-
-export type RegisterInput = z.infer<typeof registerSchema>;
-
+// REGISTER
 const register: RequestHandler = async(req, res) => {
   // Parse req body, throw ZodError if not match with schema 
   const userInput = registerSchema.parse(req.body);
@@ -53,17 +35,7 @@ const register: RequestHandler = async(req, res) => {
 };
 
 
-const loginSchema = z.object({
-  username: z.string().min(5, "Username must be at least 5 characters long"),
-  password: z
-    .string()
-    .min(8, "Password must be at least 8 characters long")
-    .regex(/[A-Za-z]/, "Password must contain at least one letter")
-    .regex(/\d/, "Password must contain at least one number"),
-})
-
-export type LoginInput = z.infer<typeof loginSchema>;
-
+// LOGIN
 const login: RequestHandler = async(req, res) => {
   // Parse req body, throw ZodError if not match with schema 
   const userInput = loginSchema.parse(req.body);
@@ -86,7 +58,7 @@ const login: RequestHandler = async(req, res) => {
   })
 };
 
-
+// REFRESH
 const refresh: RequestHandler = async (req, res) => {
   // Get the refresh token from cookies
   const refreshToken = req.cookies[REFRESH_COOKIE_NAME];
@@ -112,7 +84,7 @@ const refresh: RequestHandler = async (req, res) => {
   });
 };
 
-// Logout one device that matches with tokenHash
+// LOGOUT: One device that matches with tokenHash
 const logout: RequestHandler = async (req, res) => {
   // Get the refresh token from cookies
   const refreshToken = req.cookies[REFRESH_COOKIE_NAME];
@@ -147,7 +119,7 @@ const logout: RequestHandler = async (req, res) => {
   res.sendStatus(StatusCodes.NO_CONTENT);
 }
 
-// Logout all devices
+// LOGOUT: All devices
 const logoutAll: RequestHandler = async (req, res) => {
   // Get user id from the req
   const userId = req.user!.id; 
