@@ -5,7 +5,6 @@ import { prisma } from "../lib/prisma.js";
 import { signAccessToken } from "../utils/jwt-util.js";
 import { hashRefreshToken, hashPassword, comparePassword } from "../utils/hash-util.js";
 import { ConflictError } from "../errors/conflict-error.js";
-import { BadRequestError } from "../errors/bad-request-error.js";
 import { UnauthenticatedError } from "../errors/unauthenticated-error.js";
 import { addTime } from "../utils/day-util.js";
 
@@ -77,14 +76,14 @@ async function loginUser(input: LoginInput) {
   const user = await prisma.user.findUnique({where: { username }, select: { id: true, username: true, passwordHash: true }});
 
   if (!user) {
-    throw new BadRequestError("Invalid credentials");
+    throw new UnauthenticatedError("Invalid credentials");
   }
 
   const hashedPassword = user.passwordHash;
   const isMatch = await comparePassword(candidatePassword, hashedPassword);
 
   if (!isMatch) {
-    throw new BadRequestError("Invalid credentials");
+    throw new UnauthenticatedError("Invalid credentials");
   }
 
   // Sign an access token
@@ -102,7 +101,7 @@ async function loginUser(input: LoginInput) {
   data: {
     userId: user.id,
     tokenHash: hashRefreshToken(refreshToken),
-    expiresAt: addTime(new Date(Date.now()), 30, "day")
+    expiresAt: addTime(new Date(), 30, "day")
     }
   });
   
@@ -179,7 +178,7 @@ async function rotateRefreshToken(rawToken: string) {
         data: {
           userId: record.userId,
           tokenHash: newHash,
-          expiresAt: addTime(new Date(Date.now()), 30, "day"),
+          expiresAt: addTime(new Date(), 30, "day"),
         },
       },
     ),
