@@ -1,4 +1,5 @@
-import type { RequestHandler } from "express";
+import type { RequestHandler, Response } from "express";
+import type { RegisterInput, LoginInput } from "../schemas/auth-schema.js";
 import { revokeReasons } from "../services/auth-service.js";
 import { StatusCodes } from "http-status-codes";
 import { prisma } from "../lib/prisma.js";
@@ -9,24 +10,45 @@ import { hashRefreshToken } from "../utils/hash-util.js";
 import { registerSchema, loginSchema } from "../schemas/auth-schema.js";
 
 const REFRESH_COOKIE_NAME = "refreshToken";
-const REFRESH_COOKIE_PATH = "/api/v1/auth/refresh";
+const REFRESH_COOKIE_PATH = "/api/v1/auth";
 
-// REGISTER
-const register: RequestHandler = async(req, res) => {
-  // Parse req body, throw ZodError if not match with schema 
-  const userInput = registerSchema.parse(req.body);
-
-  // Register an user 
-  const result = await registerUser(userInput);
-  
-  // Set the refresh token to the cookie
-    res.cookie(REFRESH_COOKIE_NAME, result.refreshToken, {
+// Cookie Helper Functions
+// Set the refresh token in the cookie
+function setRefreshTokenCookie(res: Response, refreshToken: string) {
+  res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: REFRESH_COOKIE_PATH ,
-    expires: addTime(new Date(Date.now()), 30, "day"),
+    expires: addTime(new Date(), 30, "day"),
   });
+}
+// Clear the refresh token cookie
+function clearRefreshTokenCookie(res: Response) {
+  res.clearCookie(REFRESH_COOKIE_NAME, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: REFRESH_COOKIE_PATH ,
+  });
+}
+
+// REGISTER
+const register: RequestHandler = async(req, res) => {
+  // Parse req body, throw ZodError if not match with schema 
+  const userInput: RegisterInput = registerSchema.parse(req.body);
+
+  // Extract only necessary fields for the service layer
+  const { username, email, password } = userInput;
+
+  // Create an input object for the service layer
+  const userServiceInput = { username, email, password };
+
+  // Register an user 
+  const result = await registerUser(userServiceInput);
+  
+  // Set the refresh token to the cookie
+  setRefreshTokenCookie(res, result.refreshToken);
 
   res.status(StatusCodes.CREATED).json({
     user: result.user,
@@ -38,19 +60,13 @@ const register: RequestHandler = async(req, res) => {
 // LOGIN
 const login: RequestHandler = async(req, res) => {
   // Parse req body, throw ZodError if not match with schema 
-  const userInput = loginSchema.parse(req.body);
+  const userInput: LoginInput = loginSchema.parse(req.body);
 
   // Log in an user
   const result = await loginUser(userInput);
 
   // Set the refresh token to the cookie
-    res.cookie(REFRESH_COOKIE_NAME, result.refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: REFRESH_COOKIE_PATH ,
-    expires: addTime(new Date(Date.now()), 30, "day"),
-  });
+  setRefreshTokenCookie(res, result.refreshToken);
 
   res.status(StatusCodes.OK).json({
     user: result.user,
@@ -71,13 +87,7 @@ const refresh: RequestHandler = async (req, res) => {
   const result = await rotateRefreshToken(refreshToken);
 
   // Set the refresh token to the cookie
-  res.cookie(REFRESH_COOKIE_NAME, result.refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: REFRESH_COOKIE_PATH ,
-    expires: addTime(new Date(Date.now()), 30, "day"),
-  });
+  setRefreshTokenCookie(res, result.refreshToken);
 
   res.status(StatusCodes.OK).json({
     accessToken: result.accessToken
@@ -89,16 +99,8 @@ const logout: RequestHandler = async (req, res) => {
   // Get the refresh token from cookies
   const refreshToken = req.cookies[REFRESH_COOKIE_NAME];
   
-  // Clear cookie
-  res.clearCookie(REFRESH_COOKIE_NAME, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: REFRESH_COOKIE_PATH ,
-  });
-
   if (!refreshToken) {
-    return res.sendStatus(StatusCodes.NO_CONTENT);
+    return res.status(StatusCodes.NO_CONTENT).send();
   }
 
   // Hash the refresh token
@@ -116,7 +118,10 @@ const logout: RequestHandler = async (req, res) => {
     },
   });
 
-  res.sendStatus(StatusCodes.NO_CONTENT);
+  // Clear cookie
+  clearRefreshTokenCookie(res);
+
+  res.status(StatusCodes.NO_CONTENT).send();
 }
 
 // LOGOUT: All devices
@@ -124,21 +129,16 @@ const logoutAll: RequestHandler = async (req, res) => {
   // Get user id from the req
   const userId = req.user!.id; 
 
-  // Clear cookie
-  res.clearCookie(REFRESH_COOKIE_NAME, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: REFRESH_COOKIE_PATH,
-  });
-
   // Revoke all tokens related to the user
   await prisma.refreshToken.updateMany({
     where: { userId, revokedAt: null },
     data: { revokedAt: new Date(), revokeReason: revokeReasons.LOGOUT_ALL },
   });
 
-  res.sendStatus(StatusCodes.NO_CONTENT);
+  // Clear cookie
+  clearRefreshTokenCookie(res);
+
+  res.status(StatusCodes.NO_CONTENT).send();
 }
 
 
@@ -148,4 +148,4 @@ export {
   refresh,
   logout,
   logoutAll,
-};
+}
