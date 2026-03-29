@@ -33,7 +33,7 @@
   - httpOnly: true
   - secure: true only in production
   - sameSite: "lax"
-  - path limited to `/api/v1/auth/refresh`
+  - path limited to `/api/v1/auth`
   - maxAge uses REFRESH_TTL_MS constant
 - Refresh rotates and overwrites cookie on each refresh.
 
@@ -87,3 +87,8 @@
 - `loginSchema`
 - `refreshSchema` (if needed)
 - Keep password validation simple (min length only; avoid overengineering)
+
+## Architecture & Conventions
+- `express-async-errors` is used
+- Because `express-async-errors` is enabled, async controllers do not need local `try/catch` blocks just to forward errors.
+- Let thrown errors bubble to the global error-handling middleware.
