@@ -1,37 +1,14 @@
-import type { RequestHandler, Response } from "express";
+import type { RequestHandler } from "express";
 import type { RegisterInput, LoginInput } from "../schemas/auth-schema.js";
 import { revokeReasons } from "../services/auth-service.js";
 import { StatusCodes } from "http-status-codes";
 import { prisma } from "../lib/prisma.js";
-import {registerUser, loginUser, rotateRefreshToken} from "../services/auth-service.js";
+import { registerUser, loginUser, rotateRefreshToken } from "../services/auth-service.js";
 import { UnauthenticatedError } from "../errors/unauthenticated-error.js";
-import { addTime } from "../utils/day-util.js";
 import { hashRefreshToken } from "../utils/hash-util.js";
 import { registerSchema, loginSchema } from "../schemas/auth-schema.js";
+import { setRefreshTokenCookie, clearRefreshTokenCookie, REFRESH_COOKIE_NAME } from "../helpers/cookie-helper.js";
 
-const REFRESH_COOKIE_NAME = "refreshToken";
-const REFRESH_COOKIE_PATH = "/api/v1/auth";
-
-// Cookie Helper Functions
-// Set the refresh token in the cookie
-function setRefreshTokenCookie(res: Response, refreshToken: string) {
-  res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: REFRESH_COOKIE_PATH ,
-    expires: addTime(new Date(), 30, "day"),
-  });
-}
-// Clear the refresh token cookie
-function clearRefreshTokenCookie(res: Response) {
-  res.clearCookie(REFRESH_COOKIE_NAME, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: REFRESH_COOKIE_PATH ,
-  });
-}
 
 // REGISTER
 const register: RequestHandler = async(req, res) => {
@@ -62,8 +39,11 @@ const login: RequestHandler = async(req, res) => {
   // Parse req body, throw ZodError if not match with schema 
   const userInput: LoginInput = loginSchema.parse(req.body);
 
+  // Get the current refresh token from cookies (if exists)
+  const currentRefreshToken = req.cookies[REFRESH_COOKIE_NAME];
+  
   // Log in an user
-  const result = await loginUser(userInput);
+  const result = await loginUser(userInput, { currentRefreshToken });
 
   // Set the refresh token to the cookie
   setRefreshTokenCookie(res, result.refreshToken);
@@ -135,7 +115,7 @@ const logoutAll: RequestHandler = async (req, res) => {
     data: { revokedAt: new Date(), revokeReason: revokeReasons.LOGOUT_ALL },
   });
 
-  // Clear cookie
+  // Clear the refresh token cookie on the client
   clearRefreshTokenCookie(res);
 
   res.status(StatusCodes.NO_CONTENT).send();
