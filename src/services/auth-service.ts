@@ -1,13 +1,21 @@
-import type{ RegisterInput, LoginInput } from "../schemas/auth-schema.js";
-import type { AccessPayload } from "../utils/jwt-util.js";
+// Externals
 import crypto from "node:crypto";
+
+// Types
+import type { RegisterInput, LoginInput } from "../schemas/auth-schema.js";
+import type { AccessPayload } from "../utils/jwt-util.js";
+
+// Lib / DB
 import { prisma } from "../lib/prisma.js";
-import { signAccessToken } from "../utils/jwt-util.js";
+
+// Utils / Helpers
+import { addTime } from "../utils/day-util.js";
 import { hashRefreshToken, hashPassword, comparePassword } from "../utils/hash-util.js";
+import { signAccessToken } from "../utils/jwt-util.js";
+
+// Errors
 import { ConflictError } from "../errors/conflict-error.js";
 import { UnauthenticatedError } from "../errors/unauthenticated-error.js";
-import { addTime } from "../utils/day-util.js";
-
 
 type RegisterServiceInput = Omit<RegisterInput, "repassword">;
 type LoginUserOptions = {
@@ -40,32 +48,32 @@ async function registerUser (input: RegisterServiceInput)  {
   });
 
   // Sign an access token
-    const accessPayload: AccessPayload = {
-      sub: user.id, 
-      username: user.username
-    };
-    const accessToken = signAccessToken(accessPayload);
-  
-    // Create a refresh token
-    const refreshToken = crypto.randomBytes(64).toString("hex");
+  const accessPayload: AccessPayload = {
+    sub: user.id, 
+    username: user.username
+  };
+  const accessToken = signAccessToken(accessPayload);
 
-    // Create a refresh token record
-    await prisma.refreshToken.create({
-    data: {
-      userId: user.id,
-      tokenHash: hashRefreshToken(refreshToken),
-      expiresAt: addTime(new Date(Date.now()), 30, "day")
-      }
-    });
-    
-    return {
-      user: {
-        id: user.id,
-        username: user.username
-      },
-      accessToken,
-      refreshToken
+  // Create a refresh token
+  const refreshToken = crypto.randomBytes(64).toString("hex");
+
+  // Create a refresh token record
+  await prisma.refreshToken.create({
+  data: {
+    userId: user.id,
+    tokenHash: hashRefreshToken(refreshToken),
+    expiresAt: addTime(new Date(Date.now()), 30, "day")
     }
+  });
+  
+  return {
+    user: {
+      id: user.id,
+      username: user.username
+    },
+    accessToken,
+    refreshToken
+  }
 }
 
 // LOGIN

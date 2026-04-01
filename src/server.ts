@@ -1,10 +1,17 @@
+// Externals 
 import "dotenv/config";
 import "express-async-errors";
 import express from "express";
 import cookieParser from "cookie-parser";
+
+// Lib / DB 
+import { prisma } from "./lib/prisma.js";
+
+// Routes
 import { authRouter } from "./routes/auth-route.js";
 import { userRouter } from "./routes/user-route.js";
-import { prisma } from "./lib/prisma.js";
+
+// Middlewares
 import { authMiddleware } from "./middleware/authenticaton-middleware.js";
 import { errorHandlerMiddleware } from "./middleware/error-handler-middleware.js";
 import { notFoundMiddleware } from "./middleware/not-found-middleware.js";

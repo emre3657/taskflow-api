@@ -1,8 +1,17 @@
-import type { UpdateMeInput, UpdatePasswordInput } from "../schemas/users-schema.js";
+// Externals
 import type { RequestHandler } from "express";
 import { StatusCodes } from "http-status-codes";
+
+// Types
+import type { UpdateMeInput, UpdatePasswordInput } from "../schemas/users-schema.js";
+
+// Schemas
 import { updateMeSchema, updatePasswordSchema } from "../schemas/users-schema.js";
+
+// Services
 import { getMeService, updateMeService, updatePasswordService, deleteMeService } from "../services/user-service.js";
+
+// Utils / Helpers
 import { clearRefreshTokenCookie } from "../helpers/cookie-helper.js";
 
 // Get current user's profile

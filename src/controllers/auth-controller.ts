@@ -1,13 +1,25 @@
+// Externals
 import type { RequestHandler } from "express";
-import type { RegisterInput, LoginInput } from "../schemas/auth-schema.js";
-import { revokeReasons } from "../services/auth-service.js";
 import { StatusCodes } from "http-status-codes";
-import { prisma } from "../lib/prisma.js";
-import { registerUser, loginUser, rotateRefreshToken } from "../services/auth-service.js";
-import { UnauthenticatedError } from "../errors/unauthenticated-error.js";
-import { hashRefreshToken } from "../utils/hash-util.js";
+
+// Types
+import type { RegisterInput, LoginInput } from "../schemas/auth-schema.js";
+
+// Schemas
 import { registerSchema, loginSchema } from "../schemas/auth-schema.js";
+
+// Lib / DB
+import { prisma } from "../lib/prisma.js";
+
+// Services
+import { registerUser, loginUser, rotateRefreshToken, revokeReasons } from "../services/auth-service.js";
+
+// Utils / Helpers
+import { hashRefreshToken } from "../utils/hash-util.js";
 import { setRefreshTokenCookie, clearRefreshTokenCookie, REFRESH_COOKIE_NAME } from "../helpers/cookie-helper.js";
+
+// Errors
+import { UnauthenticatedError } from "../errors/unauthenticated-error.js";
 
 
 // REGISTER

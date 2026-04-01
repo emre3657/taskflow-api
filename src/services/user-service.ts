@@ -1,6 +1,13 @@
+// Types
 import type { UpdateMeInput, UpdatePasswordInput } from "../schemas/users-schema.js";
+
+// Lib / DB
 import { prisma } from "../lib/prisma.js";
+
+// Utils / Helpers
 import { hashPassword, comparePassword } from "../utils/hash-util.js";
+
+// Errors
 import { UnauthenticatedError } from "../errors/unauthenticated-error.js";
 import { NotFoundError } from "../errors/not-found-error.js";
 
