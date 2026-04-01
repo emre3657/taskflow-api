@@ -10,6 +10,9 @@ import { addTime } from "../utils/day-util.js";
 
 
 type RegisterServiceInput = Omit<RegisterInput, "repassword">;
+type LoginUserOptions = {
+  currentRefreshToken?: string;
+};
 
 // REGISTER
 async function registerUser (input: RegisterServiceInput)  {
@@ -55,8 +58,7 @@ async function registerUser (input: RegisterServiceInput)  {
       }
     });
     
-    // Create returning object
-    const result = {
+    return {
       user: {
         id: user.id,
         username: user.username
@@ -64,23 +66,30 @@ async function registerUser (input: RegisterServiceInput)  {
       accessToken,
       refreshToken
     }
-
-  return result;
 }
 
-
 // LOGIN
-async function loginUser(input: LoginInput) {
+async function loginUser(
+  input: LoginInput,
+  options?: LoginUserOptions
+) {
   const { username, password: candidatePassword } = input;
-  
-  const user = await prisma.user.findUnique({where: { username }, select: { id: true, username: true, passwordHash: true }});
+  const currentRefreshToken = options?.currentRefreshToken;
+
+  const user = await prisma.user.findUnique({
+    where: { username },
+    select: {
+      id: true,
+      username: true,
+      passwordHash: true,
+    },
+  });
 
   if (!user) {
     throw new UnauthenticatedError("Invalid credentials");
   }
 
-  const hashedPassword = user.passwordHash;
-  const isMatch = await comparePassword(candidatePassword, hashedPassword);
+  const isMatch = await comparePassword(candidatePassword, user.passwordHash);
 
   if (!isMatch) {
     throw new UnauthenticatedError("Invalid credentials");
@@ -88,34 +97,53 @@ async function loginUser(input: LoginInput) {
 
   // Sign an access token
   const accessPayload: AccessPayload = {
-    sub: user.id, 
-    username: user.username
+    sub: user.id,
+    username: user.username,
   };
   const accessToken = signAccessToken(accessPayload);
 
   // Create a refresh token
   const refreshToken = crypto.randomBytes(64).toString("hex");
 
-  // Create a refresh token record
-  await prisma.refreshToken.create({
-  data: {
-    userId: user.id,
-    tokenHash: hashRefreshToken(refreshToken),
-    expiresAt: addTime(new Date(), 30, "day")
+  // Hash the refresh token before storing in db
+  const newTokenHash = hashRefreshToken(refreshToken);
+
+  // Db transaction: Revoke the current refresh token if exists, and create a new record for the new refresh token
+  await prisma.$transaction(async (tx) => {
+    if (currentRefreshToken) {
+      const currentTokenHash = hashRefreshToken(currentRefreshToken);
+
+      await tx.refreshToken.updateMany({
+        where: {
+          userId: user.id,
+          tokenHash: currentTokenHash,
+          revokedAt: null,
+        },
+        data: {
+          revokedAt: new Date(),
+          revokeReason: revokeReasons.NEW_LOGIN,
+          replacedByTokenHash: newTokenHash,
+        },
+      });
     }
+
+    await tx.refreshToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: newTokenHash,
+        expiresAt: addTime(new Date(), 30, "day"),
+      },
+    });
   });
-  
-  // Create returning object
-  const result = {
+
+  return {
     user: {
       id: user.id,
-      username: user.username
+      username: user.username,
     },
     accessToken,
-    refreshToken
-  }
-
-  return result;
+    refreshToken,
+  };
 }
 
 
@@ -161,7 +189,7 @@ async function rotateRefreshToken(rawToken: string) {
   };
   const accessToken = signAccessToken(accessPayload);
 
-  // Db transaction
+  // Db transaction: Revoke the current refresh token, and create a new record for the new refresh token
   await prisma.$transaction([
     prisma.refreshToken.update(
       {
@@ -184,12 +212,12 @@ async function rotateRefreshToken(rawToken: string) {
     ),
   ]);
 
-  const result = { accessToken, refreshToken: newRefresh };
-  return result;
+  return { accessToken, refreshToken: newRefresh };
 } 
 
 // Revoke reasons
 export const revokeReasons = {
+  NEW_LOGIN: "NEW_LOGIN",
   EXPIRED: "EXPIRED",
   ROTATE: "ROTATE",
   LOGOUT: "LOGOUT",
