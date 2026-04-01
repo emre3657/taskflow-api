@@ -1,23 +1,26 @@
 import { z } from "zod";
 
-// At least one of username or email must be present
 export const updateMeSchema = z.object({
   username: z.string().trim().min(5, "Username must be at least 5 characters long").max(30, "Username must be at most 30 characters long").optional(),
   email: z.email("Please enter a valid email address").optional(),
-  password: z
+})
+.refine((data) => data.email !== undefined || data.username !== undefined, {
+  message: "At least one of username or email must be provided",
+});
+
+export const updatePasswordSchema = z.object({
+  currentPassword: z.string().min(8, "Current password must be at least 8 characters long"),
+  newPassword: z
     .string()
-    .min(8, "Password must be at least 8 characters long")
-    .regex(/[A-Za-z]/, "Password must contain at least one letter")
-    .regex(/\d/, "Password must contain at least one number")
-    .optional(),
-  repassword: z.string().min(8).optional()
-  })
-  .refine((data) => data.email !== undefined || data.username !== undefined || data.password !== undefined, {
-    message: "At least one of username, email, or password must be provided"
-  })
-  .refine((data) => data.password === data.repassword, {
-    error: "Passwords do not match", 
-    path: ["repassword"]
-  });
+    .min(8, "New password must be at least 8 characters long")
+    .regex(/[A-Za-z]/, "New password must contain at least one letter")
+    .regex(/\d/, "New password must contain at least one number"),
+  repassword: z.string().min(8, "Confirm password must be at least 8 characters long"),
+})
+.refine((data) => data.newPassword === data.repassword, {
+  message: "Passwords do not match",
+  path: ["repassword"],
+});
 
 export type UpdateMeInput = z.infer<typeof updateMeSchema>;
+export type UpdatePasswordInput = z.infer<typeof updatePasswordSchema>;
