@@ -10,6 +10,7 @@ import { prisma } from "./lib/prisma.js";
 // Routes
 import { authRouter } from "./routes/auth-route.js";
 import { userRouter } from "./routes/user-route.js";
+import { todoRouter } from "./routes/todo-route.js";
 
 // Middlewares
 import { authMiddleware } from "./middleware/authenticaton-middleware.js";
@@ -30,6 +31,9 @@ app.use("/api/v1/auth", authRouter);
 
 // User routes (with authentication middleware)
 app.use("/api/v1/users", authMiddleware, userRouter);
+
+// Todo routes (with authentication middleware)
+app.use("/api/v1/todos", authMiddleware, todoRouter);
 
 // Not found middleware
 app.use(notFoundMiddleware);
