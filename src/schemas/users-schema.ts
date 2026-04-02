@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+// Update profile schema
 export const updateMeSchema = z.object({
   username: z.string().trim().min(5, "Username must be at least 5 characters long").max(30, "Username must be at most 30 characters long").optional(),
   email: z.email("Please enter a valid email address").optional(),
@@ -8,6 +9,7 @@ export const updateMeSchema = z.object({
   message: "At least one of username or email must be provided",
 });
 
+// Update password schema
 export const updatePasswordSchema = z.object({
   currentPassword: z.string().min(8, "Current password must be at least 8 characters long"),
   newPassword: z

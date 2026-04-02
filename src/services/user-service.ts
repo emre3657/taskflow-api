@@ -56,13 +56,11 @@ export async function updatePasswordService(userId: string, data: UpdatePassword
     throw new NotFoundError("User not found");
   }
 
-  // Verify current password 
   const isMatch = await comparePassword(data.currentPassword, user.passwordHash);
   if (!isMatch) {
     throw new UnauthenticatedError("Current password is incorrect");
   }
   
-  // Hash the new password
   const newHashedPassword = await hashPassword(data.newPassword);
 
   return prisma.user.update({

@@ -3,7 +3,7 @@ import { z } from "zod";
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 
-// Create register schema with Zod
+// Register schema
 export const registerSchema = z
   .object({
   username: z.string().trim().min(5, "Username must be at least 5 characters long").max(30, "Username must be at most 30 characters long"),
@@ -22,7 +22,7 @@ export const registerSchema = z
   });
 
 
-// Create login schema with Zod
+// Login schema
 export const loginSchema = z.object({
 username: z.string().trim().min(1, "Username is required"),
 password: z
