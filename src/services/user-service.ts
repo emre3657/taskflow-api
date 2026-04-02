@@ -28,8 +28,8 @@ export async function getMeService(userId: string) {
 // Update current user's profile (email and username)
 export async function updateMeService(userId: string, data: UpdateMeInput) {
   const updatedData: UpdateMeInput = {
-    ...(data.username && { username: data.username }),
-    ...(data.email && { email: data.email }),
+    ...(data.username !== undefined && { username: data.username }),
+    ...(data.email !== undefined && { email: data.email }),
   };
 
   return prisma.user.update({
