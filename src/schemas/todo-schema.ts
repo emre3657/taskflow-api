@@ -14,5 +14,20 @@ export const updateTodoSchema = z.object({
   message: "At least one of title or completed must be provided",
 });
 
+// Get todos query schema
+export const getTodosQuerySchema = z.object({
+  completed: z.enum(["true", "false"]).optional()
+    .transform((val) => {
+      if (val === "true") return true;
+      if (val === "false") return false;
+      return undefined;
+  }),
+  search: z.string().trim().optional().transform((val) => (val === "" ? undefined : val)),
+  sort: z.string().trim().optional().transform((val) => (val === "" ? undefined : val)),
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(10),
+});
+
 export type CreateTodoInput = z.infer<typeof createTodoSchema>;
 export type UpdateTodoInput = z.infer<typeof updateTodoSchema>;
+export type GetTodosQuery = z.infer<typeof getTodosQuerySchema>;

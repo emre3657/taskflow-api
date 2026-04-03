@@ -3,10 +3,10 @@ import type { RequestHandler } from "express";
 import { StatusCodes } from "http-status-codes";
 
 // Types
-import type { CreateTodoInput, UpdateTodoInput } from "../schemas/todo-schema.js";
+import type { CreateTodoInput, UpdateTodoInput, GetTodosQuery } from "../schemas/todo-schema.js";
 
 // Schemas
-import { createTodoSchema, updateTodoSchema } from "../schemas/todo-schema.js";
+import { createTodoSchema, updateTodoSchema, getTodosQuerySchema } from "../schemas/todo-schema.js";
 
 // Services
 import { createTodoService, getTodosService, getTodoByIdService, updateTodoService, deleteTodoService } from "../services/todo-service.js";
@@ -27,9 +27,10 @@ const createTodo: RequestHandler = async (req, res) => {
 // Get all todos of the current user
 const getTodos: RequestHandler = async (req, res) => {
   const userId = req.user!.id;
+  const query: GetTodosQuery = getTodosQuerySchema.parse(req.query);
 
-  const todos = await getTodosService(userId);
-  res.status(StatusCodes.OK).json({ todos });
+  const { todos, total } = await getTodosService(userId, query);
+  res.status(StatusCodes.OK).json({ todos, total, page: query.page, limit: query.limit });
 };
 
 // Get a specific todo by id

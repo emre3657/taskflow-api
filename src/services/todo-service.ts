@@ -1,5 +1,6 @@
 // Types
-import type { CreateTodoInput, UpdateTodoInput } from "../schemas/todo-schema.js";
+import { Prisma } from "../generated/prisma/client.js";
+import type { CreateTodoInput, UpdateTodoInput, GetTodosQuery } from "../schemas/todo-schema.js";
 
 // Lib / DB
 import { prisma } from "../lib/prisma.js";
@@ -18,11 +19,70 @@ async function createTodoService(userId: string, data: CreateTodoInput) {
   });
 }
 
-async function getTodosService(userId: string) {
-  return prisma.todo.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-  });
+async function getTodosService(userId: string, query: GetTodosQuery) {
+  const where: Prisma.TodoWhereInput = { userId };
+
+  if (query.completed !== undefined) {
+    where.completed = query.completed;
+  }
+
+  if (query.search) {
+    where.title = {
+      contains: query.search,
+      mode: "insensitive",
+    };
+  }
+
+  const sortValue = query.sort ?? "createdAt_desc";
+
+  const allowedFields = ["createdAt", "title", "completed"] as const;
+  const allowedDirections = ["asc", "desc"] as const;
+
+  type SortField = (typeof allowedFields)[number];
+  type SortDirection = (typeof allowedDirections)[number];
+
+  const orderBy: Prisma.TodoOrderByWithRelationInput[] = sortValue
+    .split(",")
+    .map((pair) => pair.trim())
+    .filter(Boolean)
+    .reduce<Prisma.TodoOrderByWithRelationInput[]>((acc, pair) => {
+      const [field, direction] = pair.split("_");
+
+      if (
+        field &&
+        direction &&
+        allowedFields.includes(field as SortField) &&
+        allowedDirections.includes(direction as SortDirection)
+      ) {
+        acc.push({
+          [field]: direction === "asc" ? Prisma.SortOrder.asc : Prisma.SortOrder.desc,
+        } as Prisma.TodoOrderByWithRelationInput);
+      }
+
+      return acc;
+    }, []);
+
+  const finalOrderBy = orderBy.length > 0 ? orderBy : [{ createdAt: Prisma.SortOrder.desc }];
+
+  const skip = (query.page - 1) * query.limit;
+  const take = query.limit;
+
+  const [todos, total] = await Promise.all([
+    prisma.todo.findMany({
+      where,
+      orderBy: finalOrderBy,
+      skip,
+      take,
+    }),
+    prisma.todo.count({ where }),
+  ]);
+
+  return {
+    todos,
+    total,
+    page: query.page,
+    limit: query.limit,
+  };
 }
 
 async function getTodoByIdService(userId: string, todoId: string) {
