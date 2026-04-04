@@ -29,8 +29,8 @@ const getTodos: RequestHandler = async (req, res) => {
   const userId = req.user!.id;
   const query: GetTodosQuery = getTodosQuerySchema.parse(req.query);
 
-  const { todos, total } = await getTodosService(userId, query);
-  res.status(StatusCodes.OK).json({ todos, total, page: query.page, limit: query.limit });
+  const { todos, total, page, limit } = await getTodosService(userId, query);
+  res.status(StatusCodes.OK).json({ todos, total, page, limit });
 };
 
 // Get a specific todo by id

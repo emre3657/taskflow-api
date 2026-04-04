@@ -13,7 +13,10 @@ async function createTodoService(userId: string, data: CreateTodoInput) {
   return prisma.todo.create({
     data: {
       title: data.title,
+      description: data.description,
+      priority: data.priority,
       completed: false,
+      dueDate: data.dueDate,
       userId,
     },
   });
@@ -26,16 +29,45 @@ async function getTodosService(userId: string, query: GetTodosQuery) {
     where.completed = query.completed;
   }
 
+  if (query.priority !== undefined) {
+    where.priority = query.priority;
+  }
+
   if (query.search) {
-    where.title = {
-      contains: query.search,
-      mode: "insensitive",
+    where.OR = [
+      {
+        title: {
+          contains: query.search,
+          mode: "insensitive",
+        },
+      },
+      {
+        description: {
+          contains: query.search,
+          mode: "insensitive",
+        },
+      },
+    ];
+  }
+
+  if (query.dueBefore || query.dueAfter) {
+    where.dueDate = {
+      ...(query.dueBefore && { lte: query.dueBefore }),
+      ...(query.dueAfter && { gte: query.dueAfter }),
     };
   }
 
   const sortValue = query.sort ?? "createdAt_desc";
 
-  const allowedFields = ["createdAt", "title", "completed"] as const;
+  const allowedFields = [
+    "createdAt",
+    "updatedAt",
+    "title",
+    "completed",
+    "priority",
+    "dueDate",
+  ] as const;
+
   const allowedDirections = ["asc", "desc"] as const;
 
   type SortField = (typeof allowedFields)[number];
@@ -55,14 +87,20 @@ async function getTodosService(userId: string, query: GetTodosQuery) {
         allowedDirections.includes(direction as SortDirection)
       ) {
         acc.push({
-          [field]: direction === "asc" ? Prisma.SortOrder.asc : Prisma.SortOrder.desc,
+          [field]:
+            direction === "asc"
+              ? Prisma.SortOrder.asc
+              : Prisma.SortOrder.desc,
         } as Prisma.TodoOrderByWithRelationInput);
       }
 
       return acc;
     }, []);
 
-  const finalOrderBy = orderBy.length > 0 ? orderBy : [{ createdAt: Prisma.SortOrder.desc }];
+  const finalOrderBy =
+    orderBy.length > 0
+      ? orderBy
+      : [{ createdAt: Prisma.SortOrder.desc }];
 
   const skip = (query.page - 1) * query.limit;
   const take = query.limit;
@@ -92,8 +130,13 @@ async function getTodoByIdService(userId: string, todoId: string) {
   return todo;
 }
 
-async function updateTodoService(userId: string, todoId: string, data: UpdateTodoInput) {
+async function updateTodoService(
+  userId: string,
+  todoId: string,
+  data: UpdateTodoInput
+) {
   const existingTodo = await prisma.todo.findUnique({ where: { id: todoId } });
+
   if (!existingTodo) throw new NotFoundError("Todo not found");
   if (existingTodo.userId !== userId) throw new ForbiddenError("Access denied");
 
@@ -101,7 +144,19 @@ async function updateTodoService(userId: string, todoId: string, data: UpdateTod
     where: { id: todoId },
     data: {
       ...(data.title !== undefined && { title: data.title }),
-      ...(data.completed !== undefined && { completed: data.completed }),
+      ...(data.description !== undefined && { description: data.description }),
+      ...(data.priority !== undefined && { priority: data.priority }),
+      ...(data.dueDate !== undefined && { dueDate: data.dueDate }),
+      ...(data.completed !== undefined && {
+          completed: data.completed,
+          completedAt:
+            data.completed === existingTodo.completed
+              ? existingTodo.completedAt
+              : data.completed
+                ? new Date()
+                : null,
+            }
+          ),
     },
   });
 }

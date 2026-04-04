@@ -25,10 +25,22 @@ model User {
   refreshToken RefreshToken[]
 }
 
+enum TodoPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 model Todo {
-  id        String   @id @default(uuid())
-  title     String
-  completed Boolean  @default(false)
+  id          String       @id @default(uuid())
+  title       String
+  description String?
+  priority    TodoPriority @default(MEDIUM)
+  completed   Boolean      @default(false)
+
+  dueDate     DateTime?
+  completedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -37,18 +49,20 @@ model Todo {
 
   @@index([userId])
   @@index([userId, completed, title])
+  @@index([userId, priority])
+  @@index([userId, dueDate])
+  @@index([userId, completedAt])
 }
 
 model RefreshToken {
-  id        String   @id @default(uuid())
-  userId    String
-
-  tokenHash String   @unique
+  id                  String  @id @default(uuid())
+  userId              String
+  tokenHash           String  @unique
   replacedByTokenHash String?
 
-  revokedAt DateTime?
+  revokedAt    DateTime?
   revokeReason String?
-  
+
   expiresAt DateTime
   createdAt DateTime @default(now())
 
