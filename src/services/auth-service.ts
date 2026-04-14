@@ -26,16 +26,30 @@ type LoginUserOptions = {
 async function registerUser (input: RegisterServiceInput)  {
   const {username, email, password} = input;
 
-  // Check username constraint 
-  const existingByUsername = await prisma.user.findUnique({where: {username}});
-  if(existingByUsername) {
-    throw new ConflictError("Username already exists");
+  // Check if the username or email is already taken
+  const [existingByUsername, existingByEmail] = await Promise.all([
+    prisma.user.findUnique({ where: { username } }),
+    prisma.user.findUnique({ where: { email } }),
+  ]);
+
+  const errors = [];
+
+  if (existingByUsername) {
+    errors.push({
+      field: "username",
+      message: "This username is already taken.",
+    });
   }
 
-  // Check email constraint 
-  const existingByEmail = await prisma.user.findUnique({where: {email}});
-  if(existingByEmail) {
-    throw new ConflictError("Email already exists");
+  if (existingByEmail) {
+    errors.push({
+      field: "email",
+      message: "This email is already taken.",
+    });
+  }
+
+  if (errors.length > 0) {
+    throw new ConflictError("A conflict occurred", errors);
   }
 
   // Hash the password
