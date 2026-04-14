@@ -2,6 +2,7 @@ import type { ErrorRequestHandler } from "express";
 import { Prisma } from "../generated/prisma/client.js";
 import { ZodError } from "zod";
 import { StatusCodes } from "http-status-codes";
+import type { ConflictErrorOptions } from "../errors/conflict-error.js";
 import { CustomAPIError } from "../errors/custom-api-error.js";
 
 export const errorHandlerMiddleware: ErrorRequestHandler = (err, req, res, next) => {
@@ -22,23 +23,30 @@ export const errorHandlerMiddleware: ErrorRequestHandler = (err, req, res, next)
     return res.status(err.statusCode).json({
       message: err.message,
       code: err.code, 
+      errors: err.errors.map((e: ConflictErrorOptions) => ({
+        field: e.field,
+        message: e.message,
+      })),
     });
   }
 
   // Prisma known
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
     if (err.code === "P2002") {
-      const target = (err.meta as any)?.target;
-      const fields = Array.isArray(target)
-        ? target
-        : target
-        ? [target]
+      const target = (err.meta as { target?: string | string[] } | undefined)?.target;
+      const fields = Array.isArray(target) 
+        ? target 
+        : target 
+        ? [target] 
         : [];
 
       return res.status(StatusCodes.CONFLICT).json({
         message: "Already exists",
         code: "UNIQUE_CONSTRAINT",
-        fields,
+        errors: fields.map((field) => ({
+          field,
+          message: `This ${field} is already taken.`,
+        })),
       });
     }
 
@@ -52,7 +60,6 @@ export const errorHandlerMiddleware: ErrorRequestHandler = (err, req, res, next)
     return res.status(StatusCodes.BAD_REQUEST).json({
       message: "Database error",
       code: "DB_ERROR",
-      ...(process.env.NODE_ENV !== "production" ? { dbCode: err.code } : {}),
     });
   }
 
