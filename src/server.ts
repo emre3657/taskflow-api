@@ -3,6 +3,7 @@ import "dotenv/config";
 import "express-async-errors";
 import express from "express";
 import cookieParser from "cookie-parser";
+import cors from "cors";
 
 // Lib / DB 
 import { prisma } from "./lib/prisma.js";
@@ -19,6 +20,12 @@ import { notFoundMiddleware } from "./middleware/not-found-middleware.js";
 
 // Create Express app
 const app = express();
+
+// CORS middleware
+app.use(cors({
+  origin: "http://localhost:5173",
+  credentials: true,
+}));
 
 // Cookie parser middleware
 app.use(cookieParser());
