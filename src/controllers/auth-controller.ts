@@ -63,6 +63,7 @@ const refresh: RequestHandler = async (req, res) => {
   setRefreshTokenCookie(res, result.refreshToken);
 
   res.status(StatusCodes.OK).json({
+    user: result.user,
     accessToken: result.accessToken
   });
 };

@@ -22,7 +22,7 @@ type LoginUserOptions = {
   currentRefreshToken?: string;
 };
 
-// REGISTER
+// Register a new user
 async function registerUser (input: RegisterServiceInput)  {
   const {username, email, password} = input;
 
@@ -90,7 +90,7 @@ async function registerUser (input: RegisterServiceInput)  {
   }
 }
 
-// LOGIN
+// Login user and create session
 async function loginUser(
   input: LoginInput,
   options?: LoginUserOptions
@@ -111,6 +111,7 @@ async function loginUser(
     throw new UnauthenticatedError("Invalid credentials");
   }
 
+  // Compare the password
   const isMatch = await comparePassword(candidatePassword, user.passwordHash);
 
   if (!isMatch) {
@@ -169,7 +170,7 @@ async function loginUser(
 }
 
 
-// ROTATE 
+// Rotate refresh token
 async function rotateRefreshToken(rawToken: string) {
   // Hash refresh token that comes from cookie
   const tokenHash = hashRefreshToken(rawToken);
@@ -211,8 +212,8 @@ async function rotateRefreshToken(rawToken: string) {
   };
   const accessToken = signAccessToken(accessPayload);
 
-  // Db transaction: Revoke the current refresh token, and create a new record for the new refresh token
-  await prisma.$transaction([
+  // Db transaction: Revoke the current refresh token, create a new record for the new refresh token and get the user info
+  const [, , user] = await prisma.$transaction([
     prisma.refreshToken.update(
       {
         where: { id: record.id },
@@ -232,9 +233,14 @@ async function rotateRefreshToken(rawToken: string) {
         },
       },
     ),
+    prisma.user.findUnique({ where: { id: record.userId }, select: { id: true, username: true } })
   ]);
 
-  return { accessToken, refreshToken: newRefresh };
+  if (!user) {
+    throw new UnauthenticatedError("User not found");
+  }
+
+  return { user, accessToken, refreshToken: newRefresh };
 } 
 
 // Revoke reasons
