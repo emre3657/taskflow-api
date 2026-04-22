@@ -40,6 +40,9 @@ export const getTodosQuerySchema = z.object({
   }),
   priority: todoPrioritySchema.optional(),
   search: z.string().trim().optional().transform((val) => (val === "" ? undefined : val)),
+  status: z
+    .enum(['completed_on_time', 'completed_late', 'overdue'])
+    .optional(),
   sort: z.string().trim().optional().transform((val) => (val === "" ? undefined : val)),
   dueBefore: z.coerce.date().optional(),
   dueAfter: z.coerce.date().optional(),
