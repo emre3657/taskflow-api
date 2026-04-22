@@ -9,7 +9,7 @@ import { hashPassword, comparePassword } from "../utils/hash-util.js";
 
 // Errors
 import { UnauthenticatedError } from "../errors/unauthenticated-error.js";
-import { NotFoundError } from "../errors/not-found-error.js";
+import { NotFoundError, ConflictError } from "../errors/index.js";
 
 // Get current user
 export async function getMeService(userId: string) {
@@ -31,6 +31,50 @@ export async function updateMeService(userId: string, data: UpdateMeInput) {
     ...(data.username !== undefined && { username: data.username }),
     ...(data.email !== undefined && { email: data.email }),
   };
+
+  const [existingByUsername, existingByEmail] = await Promise.all([
+    updatedData.username !== undefined
+      ? prisma.user.findFirst({
+          where: {
+            username: updatedData.username,
+            id: {
+              not: userId,
+            },
+          },
+        })
+      : Promise.resolve(null),
+
+    updatedData.email !== undefined
+      ? prisma.user.findFirst({
+          where: {
+            email: updatedData.email,
+            id: {
+              not: userId,
+            },
+          },
+        })
+      : Promise.resolve(null),
+  ]);
+
+  const errors = [];
+
+  if (existingByUsername) {
+    errors.push({
+      field: "username",
+      message: "This username is already taken.",
+    });
+  }
+
+  if (existingByEmail) {
+    errors.push({
+      field: "email",
+      message: "This email is already taken.",
+    });
+  }
+
+  if (errors.length > 0) {
+    throw new ConflictError("A conflict occurred", errors);
+  }
 
   return prisma.user.update({
     where: { id: userId },
