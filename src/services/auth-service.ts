@@ -2,7 +2,12 @@
 import crypto from "node:crypto";
 
 // Types
-import type { RegisterInput, LoginInput } from "../schemas/auth-schema.js";
+import type { 
+  RegisterInput, 
+  LoginInput, 
+  ForgotPasswordInput, 
+  ResetPasswordInput 
+} from "../schemas/auth-schema.js";
 import type { AccessPayload } from "../utils/jwt-util.js";
 
 // Lib / DB
@@ -10,7 +15,7 @@ import { prisma } from "../lib/prisma.js";
 
 // Utils / Helpers
 import { addTime } from "../utils/day-util.js";
-import { hashRefreshToken, hashPassword, comparePassword } from "../utils/hash-util.js";
+import { hashRefreshToken, hashOneTimeToken, hashPassword, comparePassword } from "../utils/hash-util.js";
 import { signAccessToken } from "../utils/jwt-util.js";
 
 // Errors
@@ -23,7 +28,7 @@ type LoginUserOptions = {
 };
 
 // Register a new user
-async function registerUser (input: RegisterServiceInput)  {
+async function registerUserService (input: RegisterServiceInput)  {
   const {username, email, password} = input;
 
   // Check if the username or email is already taken
@@ -91,7 +96,7 @@ async function registerUser (input: RegisterServiceInput)  {
 }
 
 // Login user and create session
-async function loginUser(
+async function loginUserService(
   input: LoginInput,
   options?: LoginUserOptions
 ) {
@@ -171,7 +176,7 @@ async function loginUser(
 
 
 // Rotate refresh token
-async function rotateRefreshToken(rawToken: string) {
+async function rotateRefreshTokenService(rawToken: string) {
   // Hash refresh token that comes from cookie
   const tokenHash = hashRefreshToken(rawToken);
 
@@ -243,6 +248,102 @@ async function rotateRefreshToken(rawToken: string) {
   return { user, accessToken, refreshToken: newRefresh };
 } 
 
+// Forgot password
+async function forgotPasswordService(input: ForgotPasswordInput) {
+  const { email } = input;
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, email: true, username: true },
+  });
+
+  // Always return success-like response to prevent email enumeration
+  if (!user) {
+    return {
+      message: "If an account with that email exists, a reset link has been sent.",
+    };
+  }
+
+  // Optional: clear previous active reset tokens for this user
+  await prisma.passwordResetToken.deleteMany({
+    where: { userId: user.id },
+  });
+
+  const rawToken = crypto.randomBytes(32).toString("hex");
+  const tokenHash = hashOneTimeToken(rawToken);
+
+  await prisma.passwordResetToken.create({
+    data: {
+      userId: user.id,
+      tokenHash,
+      expiresAt: addTime(new Date(), 15, "minute"),
+    },
+  });
+
+  // TODO: mail integration later
+  // Example reset link to send:
+  // `${process.env.FRONTEND_URL}/reset-password?token=${rawToken}`
+
+  return {
+    message: "If an account with that email exists, a reset link has been sent.",
+    resetToken: rawToken, // dev only - remove when mail integration is ready
+  };
+}
+
+// Reset password
+async function resetPasswordService(input: ResetPasswordInput) {
+  const { token, newPassword } = input;
+
+  const tokenHash = hashOneTimeToken(token);
+
+  const record = await prisma.passwordResetToken.findUnique({
+    where: { tokenHash },
+    select: {
+      id: true,
+      userId: true,
+      expiresAt: true,
+    },
+  });
+
+  if (!record) {
+    throw new UnauthenticatedError("Invalid or expired reset token");
+  }
+
+  if (record.expiresAt <= new Date()) {
+    await prisma.passwordResetToken.deleteMany({
+      where: { id: record.id },
+    });
+
+    throw new UnauthenticatedError("Invalid or expired reset token");
+  }
+
+  const newPasswordHash = await hashPassword(newPassword);
+
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: record.userId },
+      data: { passwordHash: newPasswordHash },
+    }),
+    prisma.passwordResetToken.deleteMany({
+      where: { userId: record.userId },
+    }),
+    prisma.refreshToken.updateMany({
+      where: {
+        userId: record.userId,
+        revokedAt: null,
+      },
+      data: {
+        revokedAt: new Date(),
+        revokeReason: revokeReasons.PASSWORD_RESET,
+      },
+    }),
+  ]);
+
+  return {
+    message: "Password reset successfully.",
+  };
+}
+
 // Revoke reasons
 export const revokeReasons = {
   NEW_LOGIN: "NEW_LOGIN",
@@ -251,12 +352,15 @@ export const revokeReasons = {
   LOGOUT: "LOGOUT",
   LOGOUT_ALL: "LOGOUT_ALL",
   REUSE_DETECTED: "REUSE_DETECTED",
+  PASSWORD_RESET: "PASSWORD_RESET",
 } as const;
 
 
 export {
-  registerUser,
-  loginUser,
-  rotateRefreshToken,
+  registerUserService,
+  loginUserService,
+  rotateRefreshTokenService,
+  forgotPasswordService,
+  resetPasswordService
 }
 

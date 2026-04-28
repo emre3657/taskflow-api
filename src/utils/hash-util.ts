@@ -8,6 +8,10 @@ export function hashRefreshToken(token: string) {
     .digest("hex");
 }
 
+export function hashOneTimeToken(rawToken: string) {
+  return crypto.createHash("sha256").update(rawToken).digest("hex");
+}
+
 export function hashPassword (password: string) {
   return bcrypt.hash(password, 10);
 }

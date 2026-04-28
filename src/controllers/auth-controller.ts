@@ -3,16 +3,33 @@ import type { RequestHandler } from "express";
 import { StatusCodes } from "http-status-codes";
 
 // Types
-import type { RegisterInput, LoginInput } from "../schemas/auth-schema.js";
+import type {
+  RegisterInput,
+  LoginInput,
+  ForgotPasswordInput,
+  ResetPasswordInput,
+} from "../schemas/auth-schema.js";
 
 // Schemas
-import { registerSchema, loginSchema } from "../schemas/auth-schema.js";
+import {
+  registerSchema,
+  loginSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+} from "../schemas/auth-schema.js";
 
 // Lib / DB
 import { prisma } from "../lib/prisma.js";
 
 // Services
-import { registerUser, loginUser, rotateRefreshToken, revokeReasons } from "../services/auth-service.js";
+import {
+  registerUserService,
+  loginUserService,
+  rotateRefreshTokenService,
+  forgotPasswordService,
+  resetPasswordService,
+  revokeReasons,
+} from "../services/auth-service.js";
 
 // Utils / Helpers
 import { hashRefreshToken } from "../utils/hash-util.js";
@@ -28,7 +45,7 @@ const register: RequestHandler = async(req, res) => {
   const { username, email, password } = userInput;
   const userServiceInput = { username, email, password };
 
-  const result = await registerUser(userServiceInput);
+  const result = await registerUserService(userServiceInput);
   setRefreshTokenCookie(res, result.refreshToken);
 
   res.status(StatusCodes.CREATED).json({
@@ -43,7 +60,7 @@ const login: RequestHandler = async(req, res) => {
   const userInput: LoginInput = loginSchema.parse(req.body);
   const currentRefreshToken = req.cookies[REFRESH_COOKIE_NAME];
   
-  const result = await loginUser(userInput, { currentRefreshToken });
+  const result = await loginUserService(userInput, { currentRefreshToken });
   setRefreshTokenCookie(res, result.refreshToken);
 
   res.status(StatusCodes.OK).json({
@@ -59,7 +76,7 @@ const refresh: RequestHandler = async (req, res) => {
     throw new UnauthenticatedError("Missing refresh token");
   }
 
-  const result = await rotateRefreshToken(refreshToken);
+  const result = await rotateRefreshTokenService(refreshToken);
   setRefreshTokenCookie(res, result.refreshToken);
 
   res.status(StatusCodes.OK).json({
@@ -107,6 +124,30 @@ const logoutAll: RequestHandler = async (req, res) => {
   res.status(StatusCodes.NO_CONTENT).send();
 }
 
+// FORGOT PASSWORD
+const forgotPassword: RequestHandler = async (req, res) => {
+  const userInput: ForgotPasswordInput = forgotPasswordSchema.parse(req.body);
+
+  const result = await forgotPasswordService(userInput);
+
+  res.status(StatusCodes.OK).json({
+    message: result.message,
+    ...(process.env.NODE_ENV !== "production" && result.resetToken
+      ? { resetToken: result.resetToken }
+      : {}),
+  });
+};
+
+// RESET PASSWORD
+const resetPassword: RequestHandler = async (req, res) => {
+  const userInput: ResetPasswordInput = resetPasswordSchema.parse(req.body);
+
+  const result = await resetPasswordService(userInput);
+
+  res.status(StatusCodes.OK).json({
+    message: result.message,
+  });
+};
 
 export {
   register,
@@ -114,4 +155,6 @@ export {
   refresh,
   logout,
   logoutAll,
+  forgotPassword,
+  resetPassword
 }

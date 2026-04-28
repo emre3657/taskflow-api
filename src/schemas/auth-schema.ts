@@ -1,8 +1,5 @@
 import { z } from "zod";
 
-export type RegisterInput = z.infer<typeof registerSchema>;
-export type LoginInput = z.infer<typeof loginSchema>;
-
 // Register schema
 export const registerSchema = z
   .object({
@@ -30,3 +27,29 @@ password: z
   .min(1, "Password is required") 
 });
 
+// Forgot password schema
+export const forgotPasswordSchema = z.object({
+  email: z.email("Please enter a valid email address"),
+});
+
+// Reset password schema
+export const resetPasswordSchema = z
+  .object({
+    token: z.string().trim().min(1, "Reset token is required"),
+    newPassword: z
+      .string()
+      .min(8, "New password must be at least 8 characters long")
+      .max(20, "New password must be at most 20 characters long")
+      .regex(/[A-Za-z]/, "New password must contain at least one letter")
+      .regex(/\d/, "New password must contain at least one number"),
+    repassword: z.string().min(8).max(20),
+  })
+  .refine((data) => data.newPassword === data.repassword, {
+    error: "Passwords do not match",
+    path: ["repassword"],
+  });
+
+export type RegisterInput = z.infer<typeof registerSchema>;
+export type LoginInput = z.infer<typeof loginSchema>;
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
