@@ -132,9 +132,6 @@ const forgotPassword: RequestHandler = async (req, res) => {
 
   res.status(StatusCodes.OK).json({
     message: result.message,
-    ...(process.env.NODE_ENV !== "production" && result.resetToken
-      ? { resetToken: result.resetToken }
-      : {}),
   });
 };
 

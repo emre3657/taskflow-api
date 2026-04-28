@@ -10,6 +10,9 @@ import type {
 } from "../schemas/auth-schema.js";
 import type { AccessPayload } from "../utils/jwt-util.js";
 
+// Internal modules
+import { sendPasswordResetEmail } from "./email-service.js";
+
 // Lib / DB
 import { prisma } from "../lib/prisma.js";
 
@@ -257,14 +260,14 @@ async function forgotPasswordService(input: ForgotPasswordInput) {
     select: { id: true, email: true, username: true },
   });
 
-  // Always return success-like response to prevent email enumeration
+  console.log("user", user);
+
   if (!user) {
     return {
       message: "If an account with that email exists, a reset link has been sent.",
     };
   }
 
-  // Optional: clear previous active reset tokens for this user
   await prisma.passwordResetToken.deleteMany({
     where: { userId: user.id },
   });
@@ -280,13 +283,22 @@ async function forgotPasswordService(input: ForgotPasswordInput) {
     },
   });
 
-  // TODO: mail integration later
-  // Example reset link to send:
-  // `${process.env.FRONTEND_URL}/reset-password?token=${rawToken}`
+  const frontendUrl = process.env.FRONTEND_URL;
+
+  if (!frontendUrl) {
+    throw new Error("FRONTEND_URL is not configured");
+  }
+
+  const resetLink = `${frontendUrl}/reset-password?token=${rawToken}`;
+
+  await sendPasswordResetEmail({
+    to: user.email,
+    username: user.username,
+    resetLink,
+  });
 
   return {
     message: "If an account with that email exists, a reset link has been sent.",
-    resetToken: rawToken, // dev only - remove when mail integration is ready
   };
 }
 
