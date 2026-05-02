@@ -49,7 +49,15 @@ export const resetPasswordSchema = z
     path: ["repassword"],
   });
 
+// Verify email confirm schema
+export const confirmEmailVerificationSchema = z.object({
+  token: z.string().trim().min(1, "Verification token is required"),
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+export type ConfirmEmailVerificationInput = z.infer<
+  typeof confirmEmailVerificationSchema
+>;

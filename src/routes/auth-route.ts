@@ -6,7 +6,9 @@ import {
   logout, 
   logoutAll, 
   forgotPassword, 
-  resetPassword
+  resetPassword,
+  confirmVerificationEmail,
+  resendVerificationEmail
 } from "../controllers/auth-controller.js";
 import { authMiddleware } from "../middleware/authenticaton-middleware.js";
 
@@ -19,7 +21,8 @@ router.post("/logout", logout);
 router.post("/logout-all", authMiddleware, logoutAll);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
-
+router.post("/verify-email/resend", authMiddleware, resendVerificationEmail);
+router.post("/verify-email/confirm", confirmVerificationEmail);
 
 export {
   router as authRouter

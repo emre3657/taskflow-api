@@ -8,6 +8,7 @@ import type {
   LoginInput,
   ForgotPasswordInput,
   ResetPasswordInput,
+  ConfirmEmailVerificationInput
 } from "../schemas/auth-schema.js";
 
 // Schemas
@@ -16,6 +17,7 @@ import {
   loginSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  confirmEmailVerificationSchema
 } from "../schemas/auth-schema.js";
 
 // Lib / DB
@@ -28,6 +30,8 @@ import {
   rotateRefreshTokenService,
   forgotPasswordService,
   resetPasswordService,
+  resendEmailVerificationService,
+  confirmEmailVerificationService,
   revokeReasons,
 } from "../services/auth-service.js";
 
@@ -146,6 +150,29 @@ const resetPassword: RequestHandler = async (req, res) => {
   });
 };
 
+// RESEND VERIFICATION EMAIL
+const resendVerificationEmail: RequestHandler = async (req, res) => {
+  const userId = req.user!.id;
+
+  const result = await resendEmailVerificationService(userId);
+
+  res.status(StatusCodes.OK).json({
+    message: result.message,
+  });
+};
+
+// CONFIRM EMAIL VERIFICATION
+const confirmVerificationEmail: RequestHandler = async (req, res) => {
+  const userInput: ConfirmEmailVerificationInput =
+    confirmEmailVerificationSchema.parse(req.body);
+
+  const result = await confirmEmailVerificationService(userInput);
+
+  res.status(StatusCodes.OK).json({
+    message: result.message,
+  });
+};
+
 export {
   register,
   login,
@@ -153,5 +180,7 @@ export {
   logout,
   logoutAll,
   forgotPassword,
-  resetPassword
+  resetPassword,
+  resendVerificationEmail,
+  confirmVerificationEmail
 }

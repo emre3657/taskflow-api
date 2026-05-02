@@ -19,6 +19,7 @@ export async function getMeService(userId: string) {
       id: true,
       email: true,
       username: true,
+      emailVerifiedAt: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -27,7 +28,19 @@ export async function getMeService(userId: string) {
 
 // Update current user's profile (email and username)
 export async function updateMeService(userId: string, data: UpdateMeInput) {
-  const updatedData: UpdateMeInput = {
+  const currentUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+    },
+  });
+
+  if (!currentUser) {
+    throw new NotFoundError("User not found");
+  }
+
+  const updatedData: UpdateMeInput & { emailVerifiedAt?: null } = {
     ...(data.username !== undefined && { username: data.username }),
     ...(data.email !== undefined && { email: data.email }),
   };
@@ -76,6 +89,10 @@ export async function updateMeService(userId: string, data: UpdateMeInput) {
     throw new ConflictError("A conflict occurred", errors);
   }
 
+  if (updatedData.email !== undefined && updatedData.email !== currentUser.email) {
+    updatedData.emailVerifiedAt = null;
+  }
+
   return prisma.user.update({
     where: { id: userId },
     data: updatedData,
@@ -83,6 +100,7 @@ export async function updateMeService(userId: string, data: UpdateMeInput) {
       id: true,
       email: true,
       username: true,
+      emailVerifiedAt: true,
       createdAt: true,
       updatedAt: true,
     },
@@ -114,6 +132,7 @@ export async function updatePasswordService(userId: string, data: UpdatePassword
       id: true,
       email: true,
       username: true,
+      emailVerifiedAt: true,
       createdAt: true,
       updatedAt: true,
     },

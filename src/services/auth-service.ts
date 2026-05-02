@@ -6,12 +6,13 @@ import type {
   RegisterInput, 
   LoginInput, 
   ForgotPasswordInput, 
-  ResetPasswordInput 
+  ResetPasswordInput,
+  ConfirmEmailVerificationInput
 } from "../schemas/auth-schema.js";
 import type { AccessPayload } from "../utils/jwt-util.js";
 
 // Internal modules
-import { sendPasswordResetEmail } from "./email-service.js";
+import { sendPasswordResetEmail, sendEmailVerificationEmail } from "./email-service.js";
 
 // Lib / DB
 import { prisma } from "../lib/prisma.js";
@@ -31,10 +32,9 @@ type LoginUserOptions = {
 };
 
 // Register a new user
-async function registerUserService (input: RegisterServiceInput)  {
-  const {username, email, password} = input;
+async function registerUserService(input: RegisterServiceInput) {
+  const { username, email, password } = input;
 
-  // Check if the username or email is already taken
   const [existingByUsername, existingByEmail] = await Promise.all([
     prisma.user.findUnique({ where: { username } }),
     prisma.user.findUnique({ where: { email } }),
@@ -60,44 +60,65 @@ async function registerUserService (input: RegisterServiceInput)  {
     throw new ConflictError("A conflict occurred", errors);
   }
 
-  // Hash the password
   const passwordHash = await hashPassword(password);
 
-  // Create an user
   const user = await prisma.user.create({
-    data: {username, email, passwordHash},
-    select: { id: true, username: true }
+    data: { username, email, passwordHash },
+    select: { id: true, username: true, email: true, emailVerifiedAt: true },
   });
 
-  // Sign an access token
   const accessPayload: AccessPayload = {
-    sub: user.id, 
-    username: user.username
+    sub: user.id,
+    username: user.username,
   };
   const accessToken = signAccessToken(accessPayload);
 
-  // Create a refresh token
   const refreshToken = crypto.randomBytes(64).toString("hex");
 
-  // Create a refresh token record
-  await prisma.refreshToken.create({
-  data: {
-    userId: user.id,
-    tokenHash: hashRefreshToken(refreshToken),
-    expiresAt: addTime(new Date(Date.now()), 30, "day")
-    }
+  const rawVerificationToken = crypto.randomBytes(32).toString("hex");
+  const verificationTokenHash = hashOneTimeToken(rawVerificationToken);
+
+  await prisma.$transaction([
+    prisma.refreshToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: hashRefreshToken(refreshToken),
+        expiresAt: addTime(new Date(), 30, "day"),
+      },
+    }),
+    prisma.emailVerificationToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: verificationTokenHash,
+        expiresAt: addTime(new Date(), 30, "minute"),
+      },
+    }),
+  ]);
+
+  const frontendUrl = process.env.FRONTEND_URL;
+
+  if (!frontendUrl) {
+    throw new Error("FRONTEND_URL is not configured");
+  }
+
+  const verificationLink = `${frontendUrl}/verify-email?token=${rawVerificationToken}`;
+
+  await sendEmailVerificationEmail({
+    to: user.email,
+    username: user.username,
+    verificationLink,
   });
-  
+
   return {
     user: {
       id: user.id,
-      username: user.username
+      username: user.username,
+      emailVerifiedAt: user.emailVerifiedAt,
     },
     accessToken,
-    refreshToken
-  }
+    refreshToken,
+  };
 }
-
 // Login user and create session
 async function loginUserService(
   input: LoginInput,
@@ -112,6 +133,7 @@ async function loginUserService(
       id: true,
       username: true,
       passwordHash: true,
+      emailVerifiedAt: true,
     },
   });
 
@@ -171,6 +193,7 @@ async function loginUserService(
     user: {
       id: user.id,
       username: user.username,
+      emailVerifiedAt: user.emailVerifiedAt,
     },
     accessToken,
     refreshToken,
@@ -241,7 +264,10 @@ async function rotateRefreshTokenService(rawToken: string) {
         },
       },
     ),
-    prisma.user.findUnique({ where: { id: record.userId }, select: { id: true, username: true } })
+    prisma.user.findUnique({ 
+      where: { id: record.userId }, 
+      select: { id: true, username: true, emailVerifiedAt: true } 
+    })
   ]);
 
   if (!user) {
@@ -356,6 +382,106 @@ async function resetPasswordService(input: ResetPasswordInput) {
   };
 }
 
+// Resend email verification
+async function resendEmailVerificationService(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      emailVerifiedAt: true,
+    },
+  });
+
+  if (!user) {
+    throw new UnauthenticatedError("User not found");
+  }
+
+  if (user.emailVerifiedAt) {
+    return {
+      message: "Email is already verified.",
+    };
+  }
+
+  await prisma.emailVerificationToken.deleteMany({
+    where: { userId: user.id },
+  });
+
+  const rawVerificationToken = crypto.randomBytes(32).toString("hex");
+  const verificationTokenHash = hashOneTimeToken(rawVerificationToken);
+
+  await prisma.emailVerificationToken.create({
+    data: {
+      userId: user.id,
+      tokenHash: verificationTokenHash,
+      expiresAt: addTime(new Date(), 30, "minute"),
+    },
+  });
+
+  const frontendUrl = process.env.FRONTEND_URL;
+
+  if (!frontendUrl) {
+    throw new Error("FRONTEND_URL is not configured");
+  }
+
+  const verificationLink = `${frontendUrl}/verify-email?token=${rawVerificationToken}`;
+
+  await sendEmailVerificationEmail({
+    to: user.email,
+    username: user.username,
+    verificationLink,
+  });
+
+  return {
+    message: "A verification email has been sent.",
+  };
+}
+
+// Confirm email verification
+async function confirmEmailVerificationService(input: ConfirmEmailVerificationInput) {
+  const { token } = input;
+
+  const tokenHash = hashOneTimeToken(token);
+
+  const record = await prisma.emailVerificationToken.findUnique({
+    where: { tokenHash },
+    select: {
+      id: true,
+      userId: true,
+      expiresAt: true,
+    },
+  });
+
+  if (!record) {
+    throw new UnauthenticatedError("Invalid or expired verification token");
+  }
+
+  if (record.expiresAt <= new Date()) {
+    await prisma.emailVerificationToken.deleteMany({
+      where: { id: record.id },
+    });
+
+    throw new UnauthenticatedError("Invalid or expired verification token");
+  }
+
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: record.userId },
+      data: {
+        emailVerifiedAt: new Date(),
+      },
+    }),
+    prisma.emailVerificationToken.deleteMany({
+      where: { userId: record.userId },
+    }),
+  ]);
+
+  return {
+    message: "Email verified successfully.",
+  };
+}
+
 // Revoke reasons
 export const revokeReasons = {
   NEW_LOGIN: "NEW_LOGIN",
@@ -373,6 +499,8 @@ export {
   loginUserService,
   rotateRefreshTokenService,
   forgotPasswordService,
-  resetPasswordService
+  resetPasswordService,
+  resendEmailVerificationService,
+  confirmEmailVerificationService
 }
 
