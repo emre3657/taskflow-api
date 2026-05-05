@@ -96,7 +96,7 @@ async function getTodosService(userId: string, query: GetTodosQuery) {
 async function getTodoByIdService(userId: string, todoId: string) {
   const todo = await prisma.todo.findUnique({ where: { id: todoId } });
   if (!todo) throw new NotFoundError("Todo not found");
-  if (todo.userId !== userId) {console.log("Access denied"); throw new ForbiddenError("Access denied");}
+  if (todo.userId !== userId) throw new ForbiddenError("Access denied");
   return todo;
 }
 

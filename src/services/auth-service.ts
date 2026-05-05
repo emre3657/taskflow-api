@@ -286,8 +286,6 @@ async function forgotPasswordService(input: ForgotPasswordInput) {
     select: { id: true, email: true, username: true },
   });
 
-  console.log("user", user);
-
   if (!user) {
     return {
       message: "If an account with that email exists, a reset link has been sent.",
